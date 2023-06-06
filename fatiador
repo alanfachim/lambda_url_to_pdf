@@ -1,0 +1,87 @@
+# Importar o módulo pyppeteer
+from io import BytesIO
+from PIL import Image
+import pyppeteer
+import asyncio
+import base64
+
+
+# Criar uma função assíncrona para gerar uma imagem de uma página web
+async def screenshot(url, image_path, size):
+    # Lançar um navegador com o pyppeteer
+    browser = await pyppeteer.launch()
+    # Criar uma nova aba
+    page = await browser.newPage()
+    await page.setViewport(size)
+    # Navegar para a url desejada
+    await page.goto(url)
+    # Tirar um screenshot da página e salvar no caminho especificado
+    await page.screenshot({'path': image_path})
+    # Fechar o navegador
+    await browser.close()
+
+# Criar uma função para verificar se uma linha em uma determinada posição y é formada por pixels brancos
+
+
+def check_white_line(image, y):
+    # Obter a largura e a altura da imagem
+    width, height = image.size
+    # Verificar se o y está dentro dos limites da imagem
+    if y < 0 or y >= height:
+        # Retornar False se o y for inválido
+        return False
+    # Percorrer todos os pixels na linha y
+    for linha in range(100):
+        invalido = False
+        for x in range(width):
+            # Obter o valor RGB do pixel na posição (x, y)
+            r, g, b, a = image.getpixel((x, y+linha))
+            # Verificar se o pixel é branco (r = g = b = 255)
+            if r < 215 or g < 215 or b < 215:
+                # Retornar False se o pixel não for branco
+                invalido = True
+                break
+        if not invalido:
+            return linha
+    # Retornar True se todos os pixels na linha y forem brancos
+    return linha
+
+# Exemplo de uso das funções
+
+
+img_template = """ 
+    <img  originalsrc="cid:ii_lijo93iu4" naturalheight="0" naturalwidth="0"
+        src="{img_url}"  
+        style="margin-right: 0px; min-width: auto; min-height: auto; max-width: 100%; height: auto; cursor: pointer;"
+         fetchpriority="high" >
+    <br aria-hidden="true"> """
+
+# Definir a url da página web que queremos capturar
+url = 'https://pt-br.facebook.com/'
+# Definir o caminho onde queremos salvar a imagem
+image_path = 'screenshot.png'
+# Definir a posição y da linha que queremos verificar
+y = 0
+size = {"width": 800, "height": 1000, }
+
+
+
+# Chamar a função assíncrona para gerar a imagem da página web
+asyncio.get_event_loop().run_until_complete(screenshot(url, image_path, size))
+image = Image.open(image_path)
+tamanho_alvo = 200
+html_img =""
+while y < size["height"]:
+    y_old = y
+    y = y + check_white_line(image, y+tamanho_alvo)+tamanho_alvo
+    cropped_image = image.crop((0, y_old, size["width"], y))
+    buffered = BytesIO()
+    cropped_image.save(buffered, format="png") 
+    cropped_image.save(f'{y}.png')
+    html_img+=img_template.replace("{img_url}","data:image/png;base64,"+base64.b64encode(buffered.getvalue()).decode('utf-8'))
+
+
+# Imprimir o resultado na tela 
+f = open("demofile2.html", "a")
+f.write(html_img)
+f.close()
